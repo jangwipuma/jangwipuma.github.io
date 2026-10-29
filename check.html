@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>위임장 접수 확인 · 장위 푸르지오 마크원</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="hero">
+  <div class="inner">
+    <div class="badge"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 19c0-8 5-13 14-14-1 9-6 14-14 14z" fill="#7ab648"/><path d="M5 19c3-4 6-7 10-10" stroke="#0e4a37" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+    <h1>위임장 접수 확인</h1>
+    <p>장위 푸르지오 마크원 입주예정자협의회</p>
+  </div>
+</header>
+
+<main class="wrap" style="padding-top:16px">
+  <section class="card" id="statsCard" style="display:none">
+    <h2>접수 현황</h2>
+    <p class="body-text" id="stats" style="margin:0"></p>
+  </section>
+
+  <section class="card">
+    <h2>내 위임장 확인</h2>
+    <form id="form" novalidate>
+      <div class="fld" data-k="unit">
+        <label class="f">계약 동·호수</label>
+        <div class="row2">
+          <div class="unit"><select id="dong" aria-label="동"><option value="">동 선택</option></select></div>
+          <div class="unit"><select id="ho" aria-label="호" disabled><option value="">호 선택</option></select></div>
+        </div>
+        <div class="err">동·호수를 선택해 주세요.</div>
+      </div>
+      <div class="fld" data-k="birth">
+        <label class="f">생년월일 (제출 시 선택한 날짜)</label>
+        <div class="row3" id="birthSel"></div>
+        <input type="hidden" id="birth">
+        <div class="err">생년월일을 선택해 주세요.</div>
+      </div>
+      <button type="submit" class="btn primary" id="go" style="margin-top:18px">접수 여부 확인</button>
+      <div class="msg" id="msg"></div>
+    </form>
+    <p class="hint" style="margin-top:14px">서면으로 제출하신 위임장은 협의회 확인 후 반영되어 조회까지 시간이 걸릴 수 있습니다.</p>
+  </section>
+
+  <a class="btn block" href="index.html">위임장 작성 페이지로 돌아가기</a>
+  <p class="foot">문의 · jangwipuma@gmail.com</p>
+</main>
+
+<script src="config.js"></script>
+<script src="units.js"></script>
+<script src="common.js"></script>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const dongSel = $('dong'), hoSel = $('ho');
+  Object.keys(UNITS).forEach(d => dongSel.add(new Option(d + '동', d)));
+  dongSel.addEventListener('change', () => {
+    hoSel.innerHTML = '<option value="">호 선택</option>';
+    (UNITS[dongSel.value] || []).forEach(h => hoSel.add(new Option(h + '호', h)));
+    hoSel.disabled = !dongSel.value;
+  });
+  setupBirthSelect('birth','birthSel');
+
+  const ready = SCRIPT_URL && SCRIPT_URL.indexOf('http') === 0;
+  const msg = (t, ok) => { const m = $('msg'); m.textContent = t; m.className = 'msg show ' + (ok ? 'ok' : 'bad'); };
+
+  if (ready) {
+    fetch(SCRIPT_URL + '?action=stats').then(r => r.json()).then(r => {
+      if (!r.ok) return;
+      const left = Math.max(r.majority - r.count, 0);
+      $('stats').textContent = '현재 ' + r.count.toLocaleString() + '세대 접수 / 일반분양 ' + r.total.toLocaleString() + '세대 · ' +
+        (left ? '과반(' + r.majority + '세대)까지 ' + left + '세대 남았습니다.' : '과반을 달성했습니다.');
+      $('statsCard').style.display = '';
+    }).catch(() => {});
+  }
+
+  $('form').addEventListener('submit', async e => {
+    e.preventDefault();
+    document.querySelectorAll('.fld.invalid').forEach(f => f.classList.remove('invalid'));
+    $('msg').className = 'msg';
+    let bad = false;
+    if (!dongSel.value || !hoSel.value) { document.querySelector('.fld[data-k=unit]').classList.add('invalid'); bad = true; }
+    if (!/^\d{6}$/.test($('birth').value)) { document.querySelector('.fld[data-k=birth]').classList.add('invalid'); bad = true; }
+    if (bad) return;
+    if (!ready) { msg('접수 서버가 아직 연결되지 않았습니다.'); return; }
+    const btn = $('go'); btn.disabled = true; btn.textContent = '확인 중…';
+    try {
+      const q = new URLSearchParams({ action:'check', dong: dongSel.value, ho: hoSel.value, birth: $('birth').value });
+      const r = await (await fetch(SCRIPT_URL + '?' + q)).json();
+      if (!r.ok) msg(r.message || '조회에 실패했습니다.');
+      else if (r.found) msg(dongSel.value + '동 ' + hoSel.value + '호 위임장이 접수되어 있습니다. (접수번호 ' + r.receipt + ', ' + r.time + ')', true);
+      else msg('일치하는 접수 내역이 없습니다. 동·호수와 생년월일을 다시 확인해 주세요.');
+    } catch (err) {
+      msg('네트워크 오류로 조회하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    } finally { btn.disabled = false; btn.textContent = '접수 여부 확인'; }
+  });
+})();
+</script>
+</body>
+</html>
